@@ -1,5 +1,4 @@
 import os
-
 from dotenv import load_dotenv
 from loguru import logger
 
@@ -39,6 +38,7 @@ from pipecat.adapters.schemas.tools_schema import ToolsSchema
 
 logger.info("✅ All components loaded successfully!")
 
+# Load environment variables from .env file and get the OpenAI API key.
 load_dotenv(override=True)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
@@ -46,18 +46,20 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     logger.info(f"Starting bot")
 
+    # Initialize the STT, TTS, LLM, and RTVI services.
     stt = OpenAISTTService(api_key=OPENAI_API_KEY)
     tts = OpenAITTSService(api_key=OPENAI_API_KEY)
     llm = OpenAILLMService(api_key=OPENAI_API_KEY)
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
 
+    # Set up the initial LLM context with a system prompt and tools.
     system_prompt = get_system_prompt()
     messages = [{"role": "system", "content": system_prompt}]
     tools = ToolsSchema(standard_tools=[get_register_tool(llm)])
     context = LLMContext(messages, tools)
-
     context_aggregator = LLMContextAggregatorPair(context)
 
+    # Define the processing pipeline with all the services.
     pipeline = Pipeline(
         [
             transport.input(),  # Transport user input
@@ -71,6 +73,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         ]
     )
 
+    # Create a pipeline task with metrics enabled and an observer.
     task = PipelineTask(
         pipeline,
         params=PipelineParams(
@@ -82,11 +85,8 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
-        logger.info(f"Client connected")
         # Kick off the conversation.
-        # messages.append(
-        #     {"role": "system", "content": "Say hello and briefly introduce yourself."}
-        # )
+        logger.info(f"Client connected")
         await task.queue_frames([LLMRunFrame()])
 
     @transport.event_handler("on_client_disconnected")
@@ -94,6 +94,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         logger.info(f"Client disconnected")
         await task.cancel()
 
+    # Create a runner and run the pipeline task.
     runner = PipelineRunner(handle_sigint=runner_args.handle_sigint)
 
     await runner.run(task)
