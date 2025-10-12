@@ -7,6 +7,5 @@
 - Things I have noticed
 
     - First bot:
-        - It detects too fast that I stopped talking 
         - It doesn't hang for now
         - The latency is huge, it looks like it's because it first generates the text answer and then does tts. It would be better if streamed.
