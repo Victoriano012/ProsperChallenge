@@ -24,6 +24,8 @@ import os
 from dotenv import load_dotenv
 from loguru import logger
 
+from utils import get_system_prompt
+
 print("🚀 Starting Pipecat bot...")
 print("⏳ Loading models and imports (20 seconds, first run only)\n")
 
@@ -68,18 +70,11 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     stt = OpenAISTTService(api_key=OPENAI_API_KEY)
     tts = OpenAITTSService(api_key=OPENAI_API_KEY)
     llm = OpenAILLMService(api_key=OPENAI_API_KEY)
-
-    messages = [
-        {
-            "role": "system",
-            "content": "You are a friendly AI assistant. Respond naturally and keep your answers conversational.",
-        },
-    ]
-
-    context = LLMContext(messages)
-    context_aggregator = LLMContextAggregatorPair(context)
-
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
+
+    system_prompt = get_system_prompt()
+    context = LLMContext([{"role": "system", "content": system_prompt}])
+    context_aggregator = LLMContextAggregatorPair(context)
 
     pipeline = Pipeline(
         [
@@ -107,9 +102,9 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     async def on_client_connected(transport, client):
         logger.info(f"Client connected")
         # Kick off the conversation.
-        messages.append(
-            {"role": "system", "content": "Say hello and briefly introduce yourself."}
-        )
+        # messages.append(
+        #     {"role": "system", "content": "Say hello and briefly introduce yourself."}
+        # )
         await task.queue_frames([LLMRunFrame()])
 
     @transport.event_handler("on_client_disconnected")

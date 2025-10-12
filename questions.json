@@ -1,0 +1,14 @@
+[
+    {
+        "key": "submission_date",
+        "question": "When was the claim submitted?"
+    },
+    {
+        "key": "status",
+        "question": "What is the status?"
+    },
+    {
+        "key": "claim_number",
+        "question": "What is the claim number?"
+    }
+]
