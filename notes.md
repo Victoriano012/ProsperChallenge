@@ -1,6 +1,6 @@
 # Things I could do in a future
 
-- Try different stt/tts/llm
+- Try different stt/tts/llm (Cartesia/Deepgram)
     - stt: whisper instead of gpt-4o-transcribe
     - tts: different speed/voice. Model `tts-1` (proposed by gemini)
 
