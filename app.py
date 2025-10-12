@@ -1,33 +1,11 @@
-#
-# Copyright (c) 2024–2025, Daily
-#
-# SPDX-License-Identifier: BSD 2-Clause License
-#
-
-"""Pipecat Quickstart Example.
-
-The example runs a simple voice AI bot that you can connect to using your
-browser and speak with it. You can also deploy this bot to Pipecat Cloud.
-
-Required AI services:
-- Deepgram (Speech-to-Text)
-- OpenAI (LLM)
-- Cartesia (Text-to-Speech)
-
-Run the bot using::
-
-    uv run bot.py
-"""
-
 import os
 
 from dotenv import load_dotenv
 from loguru import logger
 
-from utils import get_system_prompt
+from utils import get_system_prompt, get_register_tool
 
 print("🚀 Starting Pipecat bot...")
-print("⏳ Loading models and imports (20 seconds, first run only)\n")
 
 logger.info("Loading Local Smart Turn Analyzer V3...")
 from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
@@ -57,6 +35,7 @@ from pipecat.services.openai.stt import OpenAISTTService
 from pipecat.services.openai.tts import OpenAITTSService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.transports.daily.transport import DailyParams
+from pipecat.adapters.schemas.tools_schema import ToolsSchema
 
 logger.info("✅ All components loaded successfully!")
 
@@ -73,7 +52,10 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
 
     system_prompt = get_system_prompt()
-    context = LLMContext([{"role": "system", "content": system_prompt}])
+    messages = [{"role": "system", "content": system_prompt}]
+    tools = ToolsSchema(standard_tools=[get_register_tool(llm)])
+    context = LLMContext(messages, tools)
+
     context_aggregator = LLMContextAggregatorPair(context)
 
     pipeline = Pipeline(
