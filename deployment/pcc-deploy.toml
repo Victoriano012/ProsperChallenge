@@ -1,0 +1,6 @@
+agent_name = "prosperbot"
+image = "victoriano012/prosperbot:latest"
+secret_set = "secrets"
+
+[scaling]
+	min_agents = 1
