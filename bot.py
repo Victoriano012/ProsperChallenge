@@ -30,6 +30,9 @@ from pipecat.processors.frameworks.rtvi import RTVIConfig, RTVIObserver, RTVIPro
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import create_transport
 from pipecat.services.openai.llm import OpenAILLMService
+from pipecat.services.cartesia.tts import CartesiaTTSService
+from pipecat.services.deepgram.stt import DeepgramSTTService
+
 from pipecat.services.openai.stt import OpenAISTTService
 from pipecat.services.openai.tts import OpenAITTSService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
@@ -47,8 +50,13 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     logger.info(f"Starting bot")
 
     # Initialize the STT, TTS, LLM, and RTVI services.
-    stt = OpenAISTTService(api_key=OPENAI_API_KEY)
-    tts = OpenAITTSService(api_key=OPENAI_API_KEY)
+    stt = DeepgramSTTService(api_key=os.getenv("DEEPGRAM_API_KEY"))
+    tts = CartesiaTTSService(
+        api_key=os.getenv("CARTESIA_API_KEY"),
+        voice_id="e07c00bc-4134-4eae-9ea4-1a55fb45746b",
+    )
+    # stt = OpenAISTTService(api_key=OPENAI_API_KEY)
+    # tts = OpenAITTSService(api_key=OPENAI_API_KEY)
     llm = OpenAILLMService(api_key=OPENAI_API_KEY)
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
 
