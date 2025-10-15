@@ -19,3 +19,9 @@ The `server.py` script should make the bot accessible through the phone number `
 - I want the bot to email me the results of a call
 - The registers could have a fixed format
 - Allow it to hung up?
+
+
+# Attribution
+
+- `server.py` is based on https://github.com/pipecat-ai/pipecat-examples/blob/main/phone-chatbot/daily-pstn-dial-in/server.py
+- Many things are based on https://github.com/pipecat-ai/pipecat-quickstart
