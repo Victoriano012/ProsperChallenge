@@ -57,7 +57,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     )
     # stt = OpenAISTTService(api_key=OPENAI_API_KEY)
     # tts = OpenAITTSService(api_key=OPENAI_API_KEY)
-    llm = OpenAILLMService(api_key=OPENAI_API_KEY)
+    llm = OpenAILLMService(api_key=OPENAI_API_KEY, model="gpt-4.1-mini")
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
 
     # Set up the initial LLM context with a system prompt and tools.
