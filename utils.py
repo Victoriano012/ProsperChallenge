@@ -34,7 +34,7 @@ def get_claim_number():
 @lru_cache
 def get_questions():
     """Loads and caches the list of questions from a JSON file."""
-    with open("questions.json", "r") as f:
+    with open("data/questions.json", "r") as f:
         return json.load(f)
 
 
@@ -45,7 +45,7 @@ def get_system_prompt() -> str:
     claim_info = get_questions()
 
     # Load and format the system prompt.
-    with open("system_prompt.txt", "r") as f:
+    with open("data/system_prompt.txt", "r") as f:
         system_prompt = f.read().strip()
     return system_prompt.format(claim_number=claim_number, claim_info=claim_info)
 
@@ -80,7 +80,7 @@ def register_answer_func(filename: str):
     return inner
 
 
-def get_register_tool(llm: OpenAILLMService):
+def get_tools(llm: OpenAILLMService):
     """Creates and registers the 'register_answer' tool with the LLM."""
 
     # Create a YAML filename store the answers and register the function.
@@ -93,7 +93,7 @@ def get_register_tool(llm: OpenAILLMService):
     possible_keys = [question["key"] for question in get_questions()]
 
     # Define the schema for the 'register_answer' tool.
-    register_answer_function = FunctionSchema(
+    register_answer_tool = FunctionSchema(
         name="register_answer",
         description="Registers the extracted answer for a given question key",
         properties={
@@ -110,4 +110,4 @@ def get_register_tool(llm: OpenAILLMService):
         required=["key", "answer"],
     )
 
-    return register_answer_function
+    return [register_answer_tool]

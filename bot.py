@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from loguru import logger
 
-from utils import get_system_prompt, get_register_tool
+from utils import get_system_prompt, get_tools
 
 print("🚀 Starting Pipecat bot...")
 
@@ -55,7 +55,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     # Set up the initial LLM context with a system prompt and tools.
     system_prompt = get_system_prompt()
     messages = [{"role": "system", "content": system_prompt}]
-    tools = ToolsSchema(standard_tools=[get_register_tool(llm)])
+    tools = ToolsSchema(standard_tools=get_tools(llm))
     context = LLMContext(messages, tools)
     context_aggregator = LLMContextAggregatorPair(context)
 
