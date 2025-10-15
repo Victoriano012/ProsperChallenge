@@ -22,6 +22,7 @@ import os
 from contextlib import asynccontextmanager
 
 import aiohttp
+from httpcore import request
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -166,6 +167,7 @@ async def handle_incoming_daily_webhook(request: Request) -> JSONResponse:
                     logger.debug(
                         f"Bot started successfully via local /start_bot endpoint"
                     )
+                    update_call_room(local_data, room_details)
 
         except Exception as e:
             logger.error(f"Error starting bot: {e}")
@@ -214,8 +216,8 @@ async def start_bot_endpoint(request: Request):
         # Create runner arguments with body data
         # Note: room_url and token are passed via body, not as direct arguments
         runner_args = DailyRunnerArguments(
-            room_url=None,  # Data comes from body
-            token=None,  # Data comes from body
+            room_url=room_url,  # Data comes from body
+            token=token,  # Data comes from body
             body=body,
         )
         runner_args.handle_sigint = False
@@ -223,11 +225,51 @@ async def start_bot_endpoint(request: Request):
         # Start the bot in the background
         asyncio.create_task(bot_function(runner_args))
 
-        return {"status": "Bot started successfully", "call_id": call_id}
+        return {
+            "status": "Bot started successfully",
+            "call_id": call_id,
+            "call_domain": call_domain,
+        }
 
     except Exception as e:
         logger.error(f"Error in /start_bot endpoint: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to start bot: {str(e)}")
+
+
+def update_call_room(local_data, room_details):
+    # Update the pinless dial-in with the new room's SIP URI
+
+    call_domain, call_id = local_data.get("call_domain"), local_data.get("call_id")
+    sip_uri = room_details.sip_endpoint
+    daily_api_key = os.getenv("DAILY_API_KEY")
+
+    try:
+        logger.debug(
+            f"Redirecting call {call_id} to current room, with SIP URI: {sip_uri}"
+        )
+        content = json.dumps(
+            {
+                "callId": call_id,
+                "callDomain": call_domain,
+                "sipUri": sip_uri,
+            }
+        ).encode("utf-8")
+        print(
+            request(
+                "POST",
+                "https://api.daily.co/v1/dialin/pinlessCallUpdate",
+                headers={
+                    "Authorization": f"Bearer {daily_api_key}",
+                    "Content-Type": "application/json",
+                },
+                content=content,
+            )
+        )
+    except Exception as e:
+        logger.error(f"Error updating pinless dial-in: {e}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update pinless dial-in: {str(e)}"
+        )
 
 
 @app.get("/health")
