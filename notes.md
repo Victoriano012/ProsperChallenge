@@ -1,6 +1,6 @@
 # Structure of the bot code
 
-The main file of the bot is `bot.py`. This file is abstracted from the specifics of the task, creating a general voice chatbot, whose system prompt and tools is provided by `utils.py`, which uses the files in `data` to obtain the system_prompt. When it has a call, it will register the obtained answers in the `registers` folder.
+The main file of the bot is `bot.py`. This file is abstracted from the specifics of the task, creating a general voice chatbot, whose system prompt and tools is provided by `utils.py`, which uses the files in `data` to obtain the system_prompt. When it has a call, it will register the obtained answers in the `registers` folder and also send them to my email.
 
 
 # Status of Deployment
@@ -46,7 +46,6 @@ I have done an approximation of that, manually timing the time between when I st
 # Extra things I could do
 
 - Try different LLMs
-- I want the bot to email me the results of a call
 - The registers could have a fixed format
 - Allow it to hung up
 - Decrease latency: Stream LLM output into TTS / Register answers "offline"

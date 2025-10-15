@@ -10,6 +10,9 @@ from pipecat.services.openai.llm import OpenAILLMService
 from functools import lru_cache
 from loguru import logger
 
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import smtplib
 
 ######## System Prompt ########
 
@@ -53,12 +56,47 @@ def get_system_prompt() -> str:
 ######## Log Answer Tool ########
 
 
+def send_email(recipient_email: str, subject: str, body: str):
+    """Sends an email using SMTP."""
+    sender_email = os.getenv("SENDER_EMAIL")
+    # For Gmail, this should be an App Password if 2FA is enabled
+    sender_password = os.getenv("SENDER_PASSWORD")
+    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", 465))
+
+    if not all([sender_email, sender_password]):
+        logger.error(
+            "SENDER_EMAIL or SENDER_PASSWORD environment variables not set. Cannot send email."
+        )
+        return
+
+    # Create the email message
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = recipient_email
+    message["Subject"] = subject
+    message.attach(MIMEText(body, "plain"))
+
+    try:
+        # Connect to the server and send the email
+        logger.info(
+            f"Connecting to SMTP server {smtp_server}:{smtp_port} to send email..."
+        )
+        with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
+            server.login(sender_email, sender_password)
+            server.send_message(message)
+            logger.info(f"Email sent successfully to {recipient_email}")
+    except Exception as e:
+        logger.error(f"Failed to send email: {e}")
+
+
 def register_answer_func(filename: str):
     """Returns a closure that registers an answer to a specific YAML file."""
 
     if not os.path.exists(filename):
         with open(filename, "w") as f:
             yaml.dump({}, f)
+    num_questions = len(get_questions())
 
     async def inner(params: FunctionCallParams):
         """The actual tool handler that logs the key/answer pair."""
@@ -73,6 +111,16 @@ def register_answer_func(filename: str):
         data[key] = answer
         with open(filename, "w") as f:
             yaml.dump(data, f, indent=2)
+
+        # I will get the registers on my email as well
+        if len(data) >= num_questions:
+            logger.info("Sending email with collected data...")
+            recipient = "victorconchello@gmail.com"
+            subject = "Claim Information Collected"
+            # Format the data nicely for the email body
+            body = "The following claim information has been collected:\n\n"
+            body += yaml.dump(data)
+            send_email(recipient, subject, body)
 
         # Send a result back to the LLM.
         await params.result_callback(f"{key} registered")
