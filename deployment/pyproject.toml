@@ -1,5 +1,5 @@
 [project]
-name = "prosperbot"
+name = "prosper"
 version = "0.1.0"
 description = "AI Agent for the ProsperAI Challenge"
 requires-python = ">=3.10"
