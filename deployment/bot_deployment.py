@@ -1,3 +1,5 @@
+# This script merges bot.py, utils.py, questions.json and system_prompt.txt into a single file for easier deployment.
+
 ################################################################################################
 ######################################## Utils #################################################
 ################################################################################################
@@ -12,6 +14,9 @@ from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.services.openai.llm import OpenAILLMService
 from loguru import logger
 
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import smtplib
 
 ######## System Prompt ########
 
@@ -78,12 +83,47 @@ def get_system_prompt() -> str:
 ######## Log Answer Tool ########
 
 
+def send_email(recipient_email: str, subject: str, body: str):
+    """Sends an email using SMTP."""
+    sender_email = os.getenv("SENDER_EMAIL")
+    # For Gmail, this should be an App Password if 2FA is enabled
+    sender_password = os.getenv("SENDER_PASSWORD")
+    smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", 465))
+
+    if not all([sender_email, sender_password]):
+        logger.error(
+            "SENDER_EMAIL or SENDER_PASSWORD environment variables not set. Cannot send email."
+        )
+        return
+
+    # Create the email message
+    message = MIMEMultipart()
+    message["From"] = sender_email
+    message["To"] = recipient_email
+    message["Subject"] = subject
+    message.attach(MIMEText(body, "plain"))
+
+    try:
+        # Connect to the server and send the email
+        logger.info(
+            f"Connecting to SMTP server {smtp_server}:{smtp_port} to send email..."
+        )
+        with smtplib.SMTP_SSL(smtp_server, smtp_port) as server:
+            server.login(sender_email, sender_password)
+            server.send_message(message)
+            logger.info(f"Email sent successfully to {recipient_email}")
+    except Exception as e:
+        logger.error(f"Failed to send email: {e}")
+
+
 def register_answer_func(filename: str):
     """Returns a closure that registers an answer to a specific YAML file."""
 
     if not os.path.exists(filename):
         with open(filename, "w") as f:
             yaml.dump({}, f)
+    num_questions = len(get_questions())
 
     async def inner(params: FunctionCallParams):
         """The actual tool handler that logs the key/answer pair."""
@@ -99,13 +139,23 @@ def register_answer_func(filename: str):
         with open(filename, "w") as f:
             yaml.dump(data, f, indent=2)
 
+        # I will get the registers on my email as well
+        if len(data) >= num_questions:
+            logger.info("Sending email with collected data...")
+            recipient = "victorconchello@gmail.com"
+            subject = "Claim Information Collected"
+            # Format the data nicely for the email body
+            body = "The following claim information has been collected:\n\n"
+            body += yaml.dump(data)
+            send_email(recipient, subject, body)
+
         # Send a result back to the LLM.
         await params.result_callback(f"{key} registered")
 
     return inner
 
 
-def get_register_tool(llm: OpenAILLMService):
+def get_tools(llm: OpenAILLMService):
     """Creates and registers the 'register_answer' tool with the LLM."""
 
     # Create a YAML filename store the answers and register the function.
@@ -118,7 +168,7 @@ def get_register_tool(llm: OpenAILLMService):
     possible_keys = [question["key"] for question in get_questions()]
 
     # Define the schema for the 'register_answer' tool.
-    register_answer_function = FunctionSchema(
+    register_answer_tool = FunctionSchema(
         name="register_answer",
         description="Registers the extracted answer for a given question key",
         properties={
@@ -135,18 +185,16 @@ def get_register_tool(llm: OpenAILLMService):
         required=["key", "answer"],
     )
 
-    return register_answer_function
+    return [register_answer_tool]
 
 
 ################################################################################################
-######################################## App #################################################
+######################################### Bot ##################################################
 ################################################################################################
 
 import os
 from dotenv import load_dotenv
 from loguru import logger
-
-# from utils import get_system_prompt, get_register_tool
 
 print("🚀 Starting Pipecat bot...")
 
@@ -174,6 +222,9 @@ from pipecat.processors.frameworks.rtvi import RTVIConfig, RTVIObserver, RTVIPro
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import create_transport
 from pipecat.services.openai.llm import OpenAILLMService
+from pipecat.services.cartesia.tts import CartesiaTTSService
+from pipecat.services.deepgram.stt import DeepgramSTTService
+
 from pipecat.services.openai.stt import OpenAISTTService
 from pipecat.services.openai.tts import OpenAITTSService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
@@ -191,15 +242,20 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     logger.info(f"Starting bot")
 
     # Initialize the STT, TTS, LLM, and RTVI services.
-    stt = OpenAISTTService(api_key=OPENAI_API_KEY)
-    tts = OpenAITTSService(api_key=OPENAI_API_KEY)
-    llm = OpenAILLMService(api_key=OPENAI_API_KEY)
+    stt = DeepgramSTTService(api_key=os.getenv("DEEPGRAM_API_KEY"))
+    tts = CartesiaTTSService(
+        api_key=os.getenv("CARTESIA_API_KEY"),
+        voice_id="e07c00bc-4134-4eae-9ea4-1a55fb45746b",
+    )
+    # stt = OpenAISTTService(api_key=OPENAI_API_KEY)
+    # tts = OpenAITTSService(api_key=OPENAI_API_KEY)
+    llm = OpenAILLMService(api_key=OPENAI_API_KEY, model="gpt-4.1-mini")
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
 
     # Set up the initial LLM context with a system prompt and tools.
     system_prompt = get_system_prompt()
     messages = [{"role": "system", "content": system_prompt}]
-    tools = ToolsSchema(standard_tools=[get_register_tool(llm)])
+    tools = ToolsSchema(standard_tools=get_tools(llm))
     context = LLMContext(messages, tools)
     context_aggregator = LLMContextAggregatorPair(context)
 

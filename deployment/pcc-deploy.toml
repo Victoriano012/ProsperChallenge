@@ -1,5 +1,5 @@
-agent_name = "prosperbot"
-image = "victoriano012/prosperbot:latest"
+agent_name = "prosper"
+image = "victoriano012/prosper:latest"
 secret_set = "secrets"
 
 [scaling]

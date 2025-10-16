@@ -1,4 +1,4 @@
-curl --location --request POST 'https://api.pipecat.daily.co/v1/public/prosperbot/start' \
+curl --location --request POST 'https://api.pipecat.daily.co/v1/public/prosper/start' \
   --header "Authorization: Bearer $PIPECAT_API_KEY" \
   --header 'Content-Type: application/json' \
   --data-raw '{
