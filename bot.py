@@ -1,27 +1,3 @@
-#
-# Copyright (c) 2024–2025, Daily
-#
-# SPDX-License-Identifier: BSD 2-Clause License
-#
-
-"""Pipecat Twilio Phone Example.
-
-The example runs a simple voice AI bot that you can connect to using a
-phone via Twilio.
-
-Required AI services:
-- Deepgram (Speech-to-Text)
-- OpenAI (LLM)
-- Cartesia (Text-to-Speech)
-
-The example connects between client and server using a Twilio websocket
-connection.
-
-Run the bot using::
-
-    uv run bot.py -t twilio -x your_ngrok.ngrok.io
-"""
-
 import os
 
 from pipecat.audio.vad.vad_analyzer import VADParams
@@ -63,31 +39,6 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 
 async def run_bot(transport: BaseTransport):
-    """
-    logger.info(f"Starting bot")
-
-    stt = DeepgramSTTService(api_key=os.getenv("DEEPGRAM_API_KEY"))
-
-    tts = CartesiaTTSService(
-        api_key=os.getenv("CARTESIA_API_KEY"),
-        voice_id="71a7ad14-091c-4e8e-a314-022ece01c121",  # British Reading Lady
-    )
-
-    llm = OpenAILLMService(api_key=os.getenv("OPENAI_API_KEY"))
-
-    messages = [
-        {
-            "role": "system",
-            "content": "You are a friendly AI assistant. Respond naturally and keep your answers conversational.",
-        },
-    ]
-
-    context = OpenAILLMContext(messages)
-    context_aggregator = llm.create_context_aggregator(context)
-
-    rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
-    """
-
     logger.info(f"Starting bot")
 
     # Initialize the STT, TTS, LLM, and RTVI services.
