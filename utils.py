@@ -9,10 +9,33 @@ from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.services.openai.llm import OpenAILLMService
 from functools import lru_cache
 from loguru import logger
+from collections import defaultdict
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
+
+######## Event Dispatcher ########
+
+
+class EventDispatcher:
+    def __init__(self):
+        self._listeners = defaultdict(list)
+
+    def event_handler(self, event_name: str):
+        """Decorator to register a listener for an event."""
+
+        def decorator(func):
+            self._listeners[event_name].append(func)
+            return func
+
+        return decorator
+
+    async def dispatch(self, event_name: str, *args, **kwargs):
+        if event_name in self._listeners:
+            for listener in self._listeners[event_name]:
+                await listener(*args, **kwargs)
+
 
 ######## System Prompt ########
 
@@ -128,14 +151,24 @@ def register_answer_func(filename: str):
     return inner
 
 
-def get_tools(llm: OpenAILLMService):
-    """Creates and registers the 'register_answer' tool with the LLM."""
+def hang_up_func(dispatcher: EventDispatcher):
 
+    async def inner(params: FunctionCallParams):
+        """Dispatches a 'hang_up' event to terminate the call."""
+        logger.info("LLM requested to hang up the call. Dispatching hang_up event.")
+        await dispatcher.dispatch("hang_up")
+
+    return inner
+
+
+def get_tools(
+    llm: OpenAILLMService, dispatcher: EventDispatcher
+) -> list[FunctionSchema]:
+    """Creates and registers the 'register_answer' tool with the LLM."""
     # Create a YAML filename store the answers and register the function.
     os.makedirs("registers", exist_ok=True)
     filename = f"registers/claim_{datetime.now().strftime('%Y%m%d_%H%M%S')}.yaml"
-    func = register_answer_func(filename)
-    llm.register_function("register_answer", func)
+    llm.register_function("register_answer", register_answer_func(filename))
 
     # Get the list of possible keys for the 'key' argument from the questions file.
     possible_keys = [question["key"] for question in get_questions()]
@@ -158,4 +191,13 @@ def get_tools(llm: OpenAILLMService):
         required=["key", "answer"],
     )
 
-    return [register_answer_tool]
+    ### Hang up tool
+    llm.register_function("hang_up", hang_up_func(dispatcher))
+    hang_up_tool = FunctionSchema(
+        name="hang_up",
+        description="Ends the current call. To be used only after all questions have been answered and both parts have said their goodbyes.",
+        properties={},
+        required=[],
+    )
+
+    return [register_answer_tool, hang_up_tool]

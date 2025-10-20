@@ -1,9 +1,8 @@
 import os
 
 from pipecat.audio.vad.vad_analyzer import VADParams
-from pipecat.transports.daily.transport import DailyParams
 
-from utils import get_system_prompt, get_tools
+from utils import EventDispatcher, get_system_prompt, get_tools
 from pipecat.processors.aggregators.llm_context import LLMContext
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
 from pipecat.processors.aggregators.llm_response_universal import (
@@ -16,7 +15,7 @@ from pipecat.transports.base_transport import TransportParams
 from dotenv import load_dotenv
 from loguru import logger
 from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.frames.frames import LLMRunFrame
+from pipecat.frames.frames import EndFrame, LLMRunFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -53,9 +52,10 @@ async def run_bot(transport: BaseTransport):
     rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
 
     # Set up the initial LLM context with a system prompt and tools.
+    dispatcher = EventDispatcher()
     system_prompt = get_system_prompt()
     messages = [{"role": "system", "content": system_prompt}]
-    tools = ToolsSchema(standard_tools=get_tools(llm))
+    tools = ToolsSchema(standard_tools=get_tools(llm, dispatcher))
     context = LLMContext(messages, tools)
     context_aggregator = LLMContextAggregatorPair(context)
 
@@ -80,6 +80,11 @@ async def run_bot(transport: BaseTransport):
         ),
         observers=[RTVIObserver(rtvi)],
     )
+
+    @dispatcher.event_handler("hang_up")
+    async def on_hang_up():
+        logger.info("Hang up event received, ending the call.")
+        await task.queue_frame(EndFrame())
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
@@ -114,7 +119,6 @@ async def bot(runner_args: RunnerArguments):
         ),
         "twilio": lambda: FastAPIWebsocketParams(
             **common_transport_params,
-            add_wav_header=False,
         ),
     }
     transport = await create_transport(runner_args, transport_params)
