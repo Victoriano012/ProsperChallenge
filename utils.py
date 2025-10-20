@@ -164,7 +164,10 @@ def hang_up_func(dispatcher: EventDispatcher):
 def get_tools(
     llm: OpenAILLMService, dispatcher: EventDispatcher
 ) -> list[FunctionSchema]:
-    """Creates and registers the 'register_answer' tool with the LLM."""
+    """Creates and registers the 'register_answer' and 'hang_up' tools with the LLM."""
+
+    ##### Register answer tool #####
+
     # Create a YAML filename store the answers and register the function.
     os.makedirs("registers", exist_ok=True)
     filename = f"registers/claim_{datetime.now().strftime('%Y%m%d_%H%M%S')}.yaml"
@@ -191,7 +194,7 @@ def get_tools(
         required=["key", "answer"],
     )
 
-    ### Hang up tool
+    ##### Hang up tool #####
     llm.register_function("hang_up", hang_up_func(dispatcher))
     hang_up_tool = FunctionSchema(
         name="hang_up",
@@ -201,3 +204,22 @@ def get_tools(
     )
 
     return [register_answer_tool, hang_up_tool]
+
+
+"""
+This answer_description forces each answer to be in a specific format depending on the question key.
+However, I'm not using it because it is very fragile and would require a lot of testing.
+Also I'm not sure which should be the possible statuses of a claim.
+
+
+answer_description = "The answer extracted from the user's response. The format depends on the 'key':\n"
+for q in get_questions():
+    key = q["key"]
+    response_type = q["response_type"]
+    if response_type == "date":
+        answer_description += f"- If key is '{key}', the answer must be a date in YYYY-MM-DD format.\n"
+    elif response_type.startswith("enum"):
+        answer_description += f"- If key is '{key}', the answer must be one of {response_type.replace('enum', '')}.\n"
+    else:  # string
+        answer_description += f"- If key is '{key}', the answer is a string.\n"
+"""
