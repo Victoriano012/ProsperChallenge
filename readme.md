@@ -57,7 +57,6 @@ This was done locally, the same could be done on the phone call. Through the cal
 # Extra things that could be done
 
 - The registers could have a fixed format
-- Allow it to hung up
 - Decrease latency: Stream LLM output into TTS / Register answers "offline" / Investigate Cartesia TTFB
 
 
