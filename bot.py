@@ -1,52 +1,87 @@
+#
+# Copyright (c) 2024–2025, Daily
+#
+# SPDX-License-Identifier: BSD 2-Clause License
+#
+
+"""Pipecat Twilio Phone Example.
+
+The example runs a simple voice AI bot that you can connect to using a
+phone via Twilio.
+
+Required AI services:
+- Deepgram (Speech-to-Text)
+- OpenAI (LLM)
+- Cartesia (Text-to-Speech)
+
+The example connects between client and server using a Twilio websocket
+connection.
+
+Run the bot using::
+
+    uv run bot.py -t twilio -x your_ngrok.ngrok.io
+"""
+
 import os
-from dotenv import load_dotenv
-from loguru import logger
 
 from utils import get_system_prompt, get_tools
-
-print("🚀 Starting Pipecat bot...")
-
-logger.info("Loading Local Smart Turn Analyzer V3...")
-from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
-
-logger.info("✅ Local Smart Turn Analyzer V3 loaded")
-logger.info("Loading Silero VAD model...")
-from pipecat.audio.vad.silero import SileroVADAnalyzer
-
-logger.info("✅ Silero VAD model loaded")
-
-from pipecat.audio.vad.vad_analyzer import VADParams
-from pipecat.frames.frames import LLMRunFrame
-
-logger.info("Loading pipeline components...")
-from pipecat.pipeline.pipeline import Pipeline
-from pipecat.pipeline.runner import PipelineRunner
-from pipecat.pipeline.task import PipelineParams, PipelineTask
 from pipecat.processors.aggregators.llm_context import LLMContext
+from pipecat.adapters.schemas.tools_schema import ToolsSchema
 from pipecat.processors.aggregators.llm_response_universal import (
     LLMContextAggregatorPair,
 )
+
+from dotenv import load_dotenv
+from loguru import logger
+from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.frames.frames import LLMRunFrame
+from pipecat.pipeline.pipeline import Pipeline
+from pipecat.pipeline.runner import PipelineRunner
+from pipecat.pipeline.task import PipelineParams, PipelineTask
+from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
 from pipecat.processors.frameworks.rtvi import RTVIConfig, RTVIObserver, RTVIProcessor
 from pipecat.runner.types import RunnerArguments
-from pipecat.runner.utils import create_transport
-from pipecat.services.openai.llm import OpenAILLMService
+from pipecat.runner.utils import parse_telephony_websocket
+from pipecat.serializers.twilio import TwilioFrameSerializer
 from pipecat.services.cartesia.tts import CartesiaTTSService
 from pipecat.services.deepgram.stt import DeepgramSTTService
+from pipecat.services.openai.llm import OpenAILLMService
+from pipecat.transports.base_transport import BaseTransport
+from pipecat.transports.websocket.fastapi import (
+    FastAPIWebsocketParams,
+    FastAPIWebsocketTransport,
+)
 
-from pipecat.services.openai.stt import OpenAISTTService
-from pipecat.services.openai.tts import OpenAITTSService
-from pipecat.transports.base_transport import BaseTransport, TransportParams
-from pipecat.transports.daily.transport import DailyParams
-from pipecat.adapters.schemas.tools_schema import ToolsSchema
-
-logger.info("✅ All components loaded successfully!")
-
-# Load environment variables from .env file and get the OpenAI API key.
 load_dotenv(override=True)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 
-async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
+async def run_bot(transport: BaseTransport):
+    """
+    logger.info(f"Starting bot")
+
+    stt = DeepgramSTTService(api_key=os.getenv("DEEPGRAM_API_KEY"))
+
+    tts = CartesiaTTSService(
+        api_key=os.getenv("CARTESIA_API_KEY"),
+        voice_id="71a7ad14-091c-4e8e-a314-022ece01c121",  # British Reading Lady
+    )
+
+    llm = OpenAILLMService(api_key=os.getenv("OPENAI_API_KEY"))
+
+    messages = [
+        {
+            "role": "system",
+            "content": "You are a friendly AI assistant. Respond naturally and keep your answers conversational.",
+        },
+    ]
+
+    context = OpenAILLMContext(messages)
+    context_aggregator = llm.create_context_aggregator(context)
+
+    rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
+    """
+
     logger.info(f"Starting bot")
 
     # Initialize the STT, TTS, LLM, and RTVI services.
@@ -67,7 +102,6 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     context = LLMContext(messages, tools)
     context_aggregator = LLMContextAggregatorPair(context)
 
-    # Define the processing pipeline with all the services.
     pipeline = Pipeline(
         [
             transport.input(),  # Transport user input
@@ -81,10 +115,11 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         ]
     )
 
-    # Create a pipeline task with metrics enabled and an observer.
     task = PipelineTask(
         pipeline,
         params=PipelineParams(
+            audio_in_sample_rate=8000,
+            audio_out_sample_rate=8000,
             enable_metrics=True,
             enable_usage_metrics=True,
         ),
@@ -93,48 +128,48 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
-        # Kick off the conversation.
         logger.info(f"Client connected")
-        await task.queue_frames([LLMRunFrame()])
+        # Kick off the conversation.
+        # messages.append(
+        #     {"role": "system", "content": "Say hello and briefly introduce yourself."}
+        # )
+        await task.queue_frame(LLMRunFrame())
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
         logger.info(f"Client disconnected")
         await task.cancel()
 
-    # Create a runner and run the pipeline task.
-    runner = PipelineRunner(handle_sigint=runner_args.handle_sigint)
+    runner = PipelineRunner(handle_sigint=False)
 
     await runner.run(task)
 
 
 async def bot(runner_args: RunnerArguments):
     """Main bot entry point for the bot starter."""
-    stop_secs = 0.3
-    start_secs = 0.0
 
-    transport_params = {
-        "daily": lambda: DailyParams(
+    transport_type, call_data = await parse_telephony_websocket(runner_args.websocket)
+    logger.info(f"Auto-detected transport: {transport_type}")
+
+    serializer = TwilioFrameSerializer(
+        stream_sid=call_data["stream_id"],
+        call_sid=call_data["call_id"],
+        account_sid=os.getenv("TWILIO_ACCOUNT_SID", ""),
+        auth_token=os.getenv("TWILIO_AUTH_TOKEN", ""),
+    )
+
+    transport = FastAPIWebsocketTransport(
+        websocket=runner_args.websocket,
+        params=FastAPIWebsocketParams(
             audio_in_enabled=True,
             audio_out_enabled=True,
-            vad_analyzer=SileroVADAnalyzer(
-                params=VADParams(stop_secs=stop_secs, start_secs=start_secs)
-            ),
-            turn_analyzer=LocalSmartTurnAnalyzerV3(),
+            add_wav_header=False,
+            vad_analyzer=SileroVADAnalyzer(),
+            serializer=serializer,
         ),
-        "webrtc": lambda: TransportParams(
-            audio_in_enabled=True,
-            audio_out_enabled=True,
-            vad_analyzer=SileroVADAnalyzer(
-                params=VADParams(stop_secs=stop_secs, start_secs=start_secs)
-            ),
-            turn_analyzer=LocalSmartTurnAnalyzerV3(),
-        ),
-    }
+    )
 
-    transport = await create_transport(runner_args, transport_params)
-
-    await run_bot(transport, runner_args)
+    await run_bot(transport)
 
 
 if __name__ == "__main__":
