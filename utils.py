@@ -14,6 +14,7 @@ from collections import defaultdict
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
+import requests
 
 ######## Event Dispatcher ########
 
@@ -79,10 +80,18 @@ def get_system_prompt() -> str:
 ######## Log Answer Tool ########
 
 
-def send_email(recipient_email: str, subject: str, body: str):
+def send_email(data):
     """Sends an email using SMTP."""
+
+    logger.info("Sending email with collected data...")
+
+    # Format the data nicely for the email body
+    subject = "Claim Information Collected"
+    body = "The following claim information has been collected:\n\n"
+    body += yaml.dump(data)
+
+    recipient_email = os.getenv("RECIPIENT_EMAIL")
     sender_email = os.getenv("SENDER_EMAIL")
-    # For Gmail, this should be an App Password if 2FA is enabled
     sender_password = os.getenv("SENDER_PASSWORD")
     smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", 465))
@@ -113,6 +122,16 @@ def send_email(recipient_email: str, subject: str, body: str):
         logger.error(f"Failed to send email: {e}")
 
 
+def post_claim_info(data_to_send):
+    logger.info("Posting info to webhook...")
+    url = "https://ntfy.sh/prosper"
+
+    try:
+        requests.post(url, json=data_to_send)
+    except requests.exceptions.RequestException as e:
+        logger.info(f"An error occurred trying to post the claim information: {e}")
+
+
 def register_answer_func(filename: str):
     """Returns a closure that registers an answer to a specific YAML file."""
 
@@ -137,13 +156,8 @@ def register_answer_func(filename: str):
 
         # I will get the registers on my email as well
         if len(data) >= num_questions:
-            logger.info("Sending email with collected data...")
-            recipient = "victorconchello@gmail.com"
-            subject = "Claim Information Collected"
-            # Format the data nicely for the email body
-            body = "The following claim information has been collected:\n\n"
-            body += yaml.dump(data)
-            send_email(recipient, subject, body)
+            send_email(data)
+            post_claim_info(data)
 
         # Send a result back to the LLM.
         await params.result_callback(f"{key} registered")

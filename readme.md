@@ -1,6 +1,6 @@
 # Structure of the code
 
-The main file of the bot is `bot.py`. This file is abstracted from the specifics of the task, creating a general voice chatbot, whose system prompt and tools is provided by `utils.py`, which uses the files in `data/` to obtain the system_prompt. When it has a call, it will register the obtained answers in the `registers` folder and also send them to my email.
+The main file of the bot is `bot.py`. This file is abstracted from the specifics of the task, creating a general voice chatbot, whose system prompt and tools is provided by `utils.py`, which uses the files in `data/` to obtain the system_prompt. When it obtains all the answers about a claim, it will register them in the `registers` folder, also send them to my email and post them at https://ntfy.sh/prosper (you can access your responses for 24h here).
 
 The folder `old/` has previous efforts of doing this bot using Daily instead of Twilio and `analyze_logs.py` is used for latency evaluation.
 
